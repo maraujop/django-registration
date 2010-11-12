@@ -71,16 +71,21 @@ class RegistrationManager(models.Manager):
         
         """
         new_user = User.objects.create_user(username, email, password)
-        new_user.is_active = False
-        new_user.save()
 
-        registration_profile = self.create_profile(new_user)
+        # Little hack that checks for a settings.SEND_MAIL variable
+        # If True, it generates a code and sends an email with the activation link
+        # Otherwise the user will be activated right away without needing an email confirmation
+        send_email = getattr(settings, 'SEND_MAIL', True)
 
         if send_email:
+            new_user.is_active = False
+            registration_profile = self.create_profile(new_user)
             registration_profile.send_activation_email(site)
+        else:
+	        new_user.is_active = True
 
+        new_user.save()
         return new_user
-    create_inactive_user = transaction.commit_on_success(create_inactive_user)
 
     def create_profile(self, user):
         """
