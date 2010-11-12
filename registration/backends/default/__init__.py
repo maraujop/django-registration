@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.sites.models import RequestSite
 from django.contrib.sites.models import Site
+from django.db import transaction
 
 from registration import signals
 from registration.forms import RegistrationForm
@@ -70,17 +71,23 @@ class DefaultBackend(object):
         class of this backend as the sender.
 
         """
+
         username, email, password = kwargs['username'], kwargs['email'], kwargs['password1']
         if Site._meta.installed:
             site = Site.objects.get_current()
         else:
             site = RequestSite(request)
+
+        # Now new_user is not committed in create_inactive_user. 
+        # register is in a transaction. That way if the signal is being handled 
+        # the user will not be committed if anything goes wrong there.
         new_user = RegistrationProfile.objects.create_inactive_user(username, email,
                                                                     password, site)
         signals.user_registered.send(sender=self.__class__,
                                      user=new_user,
                                      request=request)
         return new_user
+    register = transaction.commit_on_success(register)
 
     def activate(self, request, activation_key):
         """
